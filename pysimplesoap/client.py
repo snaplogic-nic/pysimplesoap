@@ -664,27 +664,28 @@ class SoapClient(object):
             port_type = port_types[port_type_name] = {}
             operations = port_type['operations'] = {}
 
-            for operation_node in port_type_node.operation:
-                op_name = operation_node['name']
-                op = operations[op_name] = {}
-                op['style'] = operation_node['style']
-                op['parameter_order'] = (operation_node['parameterOrder'] or "").split(" ")
-                op['documentation'] = unicode(operation_node('documentation', error=False)) or ''
+            if hasattr(port_type_node, "operation"):
+                for operation_node in port_type_node.operation:
+                    op_name = operation_node['name']
+                    op = operations[op_name] = {}
+                    op['style'] = operation_node['style']
+                    op['parameter_order'] = (operation_node['parameterOrder'] or "").split(" ")
+                    op['documentation'] = unicode(operation_node('documentation', error=False)) or ''
 
-                if operation_node('input', error=False):
-                    op['input_msg'] = get_local_name(operation_node.input['message'])
-                    ns = get_namespace_prefix(operation_node.input['message'])
-                    op['namespace'] = operation_node.get_namespace_uri(ns)
+                    if operation_node('input', error=False):
+                        op['input_msg'] = get_local_name(operation_node.input['message'])
+                        ns = get_namespace_prefix(operation_node.input['message'])
+                        op['namespace'] = operation_node.get_namespace_uri(ns)
 
-                if operation_node('output', error=False):
-                    op['output_msg'] = get_local_name(operation_node.output['message'])
+                    if operation_node('output', error=False):
+                        op['output_msg'] = get_local_name(operation_node.output['message'])
 
-                #Get all fault message types this operation may return
-                fault_msgs = op['fault_msgs'] = {}
-                faults = operation_node('fault', error=False)
-                if faults is not None:
-                    for fault in operation_node('fault', error=False):
-                        fault_msgs[fault['name']] = get_local_name(fault['message'])
+                    #Get all fault message types this operation may return
+                    fault_msgs = op['fault_msgs'] = {}
+                    faults = operation_node('fault', error=False)
+                    if faults is not None:
+                        for fault in operation_node('fault', error=False):
+                            fault_msgs[fault['name']] = get_local_name(fault['message'])
 
         for binding_node in wsdl.binding:
             port_type_name = get_local_name(binding_node['type'])
@@ -705,85 +706,86 @@ class SoapClient(object):
                 'style': style,
             }
 
-            for operation_node in binding_node.operation:
-                op_name = operation_node['name']
-                op_op = operation_node('operation', ns=list(soap_uris.values()), error=False)
-                action = op_op and op_op['soapAction']
+            if hasattr(binding_node, "operation"):
+                for operation_node in binding_node.operation:
+                    op_name = operation_node['name']
+                    op_op = operation_node('operation', ns=list(soap_uris.values()), error=False)
+                    action = op_op and op_op['soapAction']
 
-                op = binding['operations'].setdefault(op_name, {})
-                op['name'] = op_name
-                op['style'] = op.get('style', style)
-                if action is not None:
-                    op['action'] = action
+                    op = binding['operations'].setdefault(op_name, {})
+                    op['name'] = op_name
+                    op['style'] = op.get('style', style)
+                    if action is not None:
+                        op['action'] = action
 
-                # input and/or output can be not present!
-                input = operation_node('input', error=False)
-                body = input and input('body', ns=list(soap_uris.values()), error=False)
-                parts_input_body = body and body['parts'] or None
+                    # input and/or output can be not present!
+                    input = operation_node('input', error=False)
+                    body = input and input('body', ns=list(soap_uris.values()), error=False)
+                    parts_input_body = body and body['parts'] or None
 
-                # parse optional header messages (some implementations use more than one!)
-                parts_input_headers = []
-                headers = input and input('header', ns=list(soap_uris.values()), error=False)
-                for header in headers or []:
-                    hdr = {'message': header['message'], 'part': header['part']}
-                    parts_input_headers.append(hdr)
+                    # parse optional header messages (some implementations use more than one!)
+                    parts_input_headers = []
+                    headers = input and input('header', ns=list(soap_uris.values()), error=False)
+                    for header in headers or []:
+                        hdr = {'message': header['message'], 'part': header['part']}
+                        parts_input_headers.append(hdr)
 
-                if 'input_msg' in op:
-                    headers = {}    # base header message structure
-                    for input_header in parts_input_headers:
-                        header_msg = get_local_name(input_header.get('message'))
-                        header_part = get_local_name(input_header.get('part'))
-                        # warning: some implementations use a separate message!
-                        hdr = get_message(messages, header_msg or op['input_msg'], header_part)
-                        if hdr:
-                            headers.update(hdr)
-                        else:
-                            pass # not enough info to search the header message:
-                    op['input'] = get_message(messages, op['input_msg'], parts_input_body, op['parameter_order'])
-                    op['header'] = headers
+                    if 'input_msg' in op:
+                        headers = {}    # base header message structure
+                        for input_header in parts_input_headers:
+                            header_msg = get_local_name(input_header.get('message'))
+                            header_part = get_local_name(input_header.get('part'))
+                            # warning: some implementations use a separate message!
+                            hdr = get_message(messages, header_msg or op['input_msg'], header_part)
+                            if hdr:
+                                headers.update(hdr)
+                            else:
+                                pass # not enough info to search the header message:
+                        op['input'] = get_message(messages, op['input_msg'], parts_input_body, op['parameter_order'])
+                        op['header'] = headers
 
-                    try:
-                        element = list(op['input'].values())[0]
-                        ns_uri = element.namespaces[None]
-                        qualified = element.qualified
-                    except (AttributeError, KeyError) as e:
-                        # TODO: fix if no parameters parsed or "variants"
-                        ns_uri = op['namespace']
-                        qualified = None
-                    if ns_uri:
-                        op['namespace'] = ns_uri
-                        op['qualified'] = qualified
+                        try:
+                            element = list(op['input'].values())[0]
+                            ns_uri = element.namespaces[None]
+                            qualified = element.qualified
+                        except (AttributeError, KeyError) as e:
+                            # TODO: fix if no parameters parsed or "variants"
+                            ns_uri = op['namespace']
+                            qualified = None
+                        if ns_uri:
+                            op['namespace'] = ns_uri
+                            op['qualified'] = qualified
 
-                    # Remove temporary property
-                    del op['input_msg']
+                        # Remove temporary property
+                        del op['input_msg']
 
-                else:
-                    op['input'] = None
-                    op['header'] = None
+                    else:
+                        op['input'] = None
+                        op['header'] = None
 
-                output = operation_node('output', error=False)
-                body = output and output('body', ns=list(soap_uris.values()), error=False)
-                parts_output_body = body and body['parts'] or None
-                if 'output_msg' in op:
-                    op['output'] = get_message(messages, op['output_msg'], parts_output_body)
-                    # Remove temporary property
-                    del op['output_msg']
-                else:
-                    op['output'] = None
+                    output = operation_node('output', error=False)
+                    body = output and output('body', ns=list(soap_uris.values()), error=False)
+                    parts_output_body = body and body['parts'] or None
+                    if 'output_msg' in op:
+                        op['output'] = get_message(messages, op['output_msg'], parts_output_body)
+                        # Remove temporary property
+                        del op['output_msg']
+                    else:
+                        op['output'] = None
 
-                if 'fault_msgs' in op:
-                    faults = op['faults'] = {}
-                    for msg in op['fault_msgs'].values():
-                        msg_obj = get_message(messages, msg, parts_output_body)
-                        tag_name = list(msg_obj)[0]
-                        faults[tag_name] = msg_obj
+                    if 'fault_msgs' in op:
+                        faults = op['faults'] = {}
+                        for msg in op['fault_msgs'].values():
+                            msg_obj = get_message(messages, msg, parts_output_body)
+                            tag_name = list(msg_obj)[0]
+                            faults[tag_name] = msg_obj
 
-                # useless? never used
-                parts_output_headers = []
-                headers = output and output('header', ns=list(soap_uris.values()), error=False)
-                for header in headers or []:
-                    hdr = {'message': header['message'], 'part': header['part']}
-                    parts_output_headers.append(hdr)
+                    # useless? never used
+                    parts_output_headers = []
+                    headers = output and output('header', ns=list(soap_uris.values()), error=False)
+                    for header in headers or []:
+                        hdr = {'message': header['message'], 'part': header['part']}
+                        parts_output_headers.append(hdr)
 
 
 
