@@ -387,6 +387,13 @@ def preprocess_schema(schema, imported_schemas, elements, xsd_uri, dialect,
             local_namespaces[None] = v
         if k == 'elementFormDefault':
             qualified = (v == "qualified")
+    # if we encounter a malformed XSD, add a tempuri to handle even though we really should fix the XSD 
+    if None not in local_namespaces:
+        if None in global_namespaces:
+            local_namespaces[None] = global_namespaces[None]
+        log.warning("Using tempuri-org for default local namespace - there is no targetNamespace value in the XSD")
+        local_namespaces[None] = "tempuri-org"
+        
     # add schema namespaces to the global namespace dict = {URI: ns prefix}
     for ns in local_namespaces.values():
         if ns not in global_namespaces:
